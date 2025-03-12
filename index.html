@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SDK iphone camera test</title>
+</head>
+
+<body>
+  <h1>SDK iphone camera test</h1>
+  <div style="display: flex; flex-direction: row;">
+    <label for="userTokenInput">Paste User Token:</label>
+    <br />
+    <input type="text" id="userTokenInput" placeholder="Paste user token">
+  </div>
+  <p>Your Display Name: <span id="displayName"></span></p>
+  <p>SDK Status: <span id="sdkStatus">Not initialized</span></p>
+  <p>Call Status: <span id="callStatus">None</span></p>
+  <p>Call Id: <span id="callId"></span></p>
+  <div>Remote Participants: <div id="remoteParticipants">None</div></div>
+  <div style="display: flex; flex-direction: row;">
+    <button id="micButton">Unmute</button>
+    <button id="cameraButton">Start Video</button>
+    <button id="switchCameraButton">Toggle Camera</button>
+    <button id="endCallButton">End Call</button>
+  </div>
+  <div>
+    <p>Chosen Camera: <span id="chosenCameraLabel">None</span></p>
+    <p>Local Video Feed:</p>
+    <div id="localVideo" style="height: 150px;"></div>
+  </div>
+  <div>
+    <p>Remote Video Feed:</p>
+    <div id="remoteVideo" style="height: 150px;"></div>
+  </div>
+</body>
+
+</html>
