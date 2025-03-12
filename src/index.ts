@@ -1,10 +1,12 @@
 import { AudioEffectsStartConfig, AudioEffectsStopConfig, Call, CallClient, Features } from "@azure/communication-calling";
 import { DeepNoiseSuppressionEffect } from "@azure/communication-calling-effects";
 import { AzureCommunicationTokenCredential } from "@azure/communication-common";
+import { createStatefulCallClient } from "@azure/communication-react";
 
 const groupId = '9d5ec556-3677-4c5b-a648-cfeb05f90659';
 
-// Mobile its a pain to get the token, so we have a default one that is auto applied
+// Mobile its a pain to get the userId token, so we have a default one that is auto applied
+const defaultMobileUserId = '<REPLACE_ME>';
 const defaultMobileToken = '<REPLACE_ME>';
 
 let noiseSuppressionEnabled = false;
@@ -23,6 +25,15 @@ async function main() {
     });
   });
 
+  // await for input of #userTokenInput to have value
+  const userId = (isAndroid || isIos) ? defaultMobileUserId : await new Promise<string>((resolve) => {
+    const userIdInput = document.getElementById('userIdInput') as HTMLInputElement;
+    userIdInput.addEventListener('input', () => {
+      userIdInput.disabled = true;
+      resolve(userIdInput.value);
+    });
+  });
+
   // REQUEST PERMISSIONS
   await navigator.permissions.query({ name: 'camera' as PermissionName });
   await navigator.permissions.query({ name: 'microphone' as PermissionName})
@@ -30,10 +41,14 @@ async function main() {
   // LOAD SDK
   const sdkStatusSpan = document.getElementById('sdkStatus');
   sdkStatusSpan.innerText = 'SDK Loading';
-  const callClient = new CallClient();
+  const callClient = createStatefulCallClient({
+    userId: { communicationUserId: userId },
+  });
+  callClient.onStateChange((state) => {
+    console.log('CallClient state changed', state);
+  });
   const tokenCredential = new AzureCommunicationTokenCredential(token);
   const callAgent = await callClient.createCallAgent(tokenCredential, { displayName: `ACS User ${Math.floor(Math.random() * 100)}` });
-  const deviceManager = await callClient.getDeviceManager()
   sdkStatusSpan.innerText = 'SDK Loaded';
   const displayNameSpan = document.getElementById('displayName');
   displayNameSpan.innerText = callAgent.displayName;

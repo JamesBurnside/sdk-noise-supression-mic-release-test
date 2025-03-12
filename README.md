@@ -9,4 +9,4 @@
 
 - `npm start`
 - Open localhost:9000 in browser
-- Paste a user token from Azure portal into the input field
+- Paste a user ID and token from Azure portal into the input field
