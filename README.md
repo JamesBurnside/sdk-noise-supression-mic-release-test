@@ -1,4 +1,4 @@
-# sdk-iphone-camera-switch-test
+# sdk-noise-supression-mic-release-test
 
 ## Setup
 

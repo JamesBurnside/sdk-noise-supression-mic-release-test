@@ -1,12 +1,13 @@
-import { Call, CallClient, LocalVideoStream, VideoStreamRenderer, VideoStreamRendererView } from "@azure/communication-calling";
+import { AudioEffectsStartConfig, AudioEffectsStopConfig, Call, CallClient, Features } from "@azure/communication-calling";
+import { DeepNoiseSuppressionEffect } from "@azure/communication-calling-effects";
 import { AzureCommunicationTokenCredential } from "@azure/communication-common";
 
-const groupId = '9d5ec556-3677-4c5b-a648-cfeb05f90658';
+const groupId = '9d5ec556-3677-4c5b-a648-cfeb05f90659';
 
 // Mobile its a pain to get the token, so we have a default one that is auto applied
 const defaultMobileToken = '<REPLACE_ME>';
 
-let chosenCameraCounter = 0;
+let noiseSuppressionEnabled = false;
 
 async function main() {
   console.log('Starting app');
@@ -49,24 +50,6 @@ async function main() {
     callIdSpan.innerText = call.id;
   });
 
-  // SETUP REMOTE PARTICIPANTS IN CALL
-  const remoteParticipantsDiv = document.getElementById('remoteParticipants');
-  call.on('remoteParticipantsUpdated', (e) => {
-    console.log('Remote participants updated', e);
-    e.added.forEach((participant) => {
-      console.log('Remote participant added', participant);
-      const participantDiv = document.createElement('div');
-      participantDiv.innerText = `Remote Participant: ${participant.displayName}`;
-      remoteParticipantsDiv.appendChild(participantDiv);
-    });
-    e.removed.forEach((participant) => {
-      console.log('Remote participant removed', participant);
-      const participantDiv = remoteParticipantsDiv.querySelector(`div:contains(${participant.displayName})`);
-      remoteParticipantsDiv.removeChild(participantDiv);
-    });
-  });
-
-
   // SETUP MIC BUTTON
   const muteButton = document.getElementById('micButton') as HTMLButtonElement;
   call.on('isMutedChanged', () => {
@@ -81,134 +64,20 @@ async function main() {
     }
   });
 
-  // SETUP CAMERA BUTTON
-  const videoButton = document.getElementById('cameraButton') as HTMLButtonElement;
-  let videoStarted = false;
-  call.on('isLocalVideoStartedChanged', () => {
-    videoStarted = call.isLocalVideoStarted;
-    videoButton.innerText = call.isLocalVideoStarted ? 'Stop Video' : 'Start Video';
-  });
-  let localVideoStream: LocalVideoStream;
-  videoButton.addEventListener('click', async () => {
-    videoButton.disabled = true;
+  // SETUP DEEP NOISE SUPRESSION BUTTON
+  const deepNoiseSupressionButton = document.getElementById('deepNoiseSupressionButton') as HTMLButtonElement;
+  deepNoiseSupressionButton.addEventListener('click', async () => {
+    deepNoiseSupressionButton.disabled = true;
     try {
-      if (videoStarted) {
-        // STOP LOCAL VIDEO
-        await call.stopVideo(localVideoStream);
-        localVideoStream = undefined;
+      if (noiseSuppressionEnabled) {
+        await stopNoiseSuppressionEffect(call);
       } else {
-        // START LOCAL VIDEO
-        const cameras = await deviceManager.getCameras();
-        const camera = cameras[0]
-        localVideoStream = new LocalVideoStream(camera);
-        try {
-          await call.startVideo(localVideoStream);
-        } catch (e) {
-          localVideoStream = undefined
-          throw e;
-        }
+        await startNoiseSuppressionEffect(call);
       }
+      noiseSuppressionEnabled = !noiseSuppressionEnabled;
+      deepNoiseSupressionButton.innerText = noiseSuppressionEnabled ? 'Stop Deep Noise Suppression' : 'Start Deep Noise Suppression';
     } finally {
-      videoButton.disabled = false;
-    }
-  });
-
-  // SETUP LOCAL FEED DISPLAY
-  const chosenCameraLabel = document.getElementById('chosenCameraLabel');
-  const localFeedDiv = document.getElementById('localVideo');
-  let localFeedView: VideoStreamRendererView;
-  call.on('localVideoStreamsUpdated', async (e) => {
-    console.log('Local video streams updated', e);
-    e.added.forEach(async (stream) => {
-      console.log('Adding local video stream');
-      chosenCameraLabel.innerText = `${stream.source.name}`;
-      const renderer = new VideoStreamRenderer(stream);
-      localFeedView = await renderer.createView({ scalingMode: 'Fit' });
-      localFeedDiv.appendChild(localFeedView.target);
-    });
-    e.removed.forEach(() => {
-      console.log('Removing local video stream');
-      localFeedView?.dispose();
-    });
-  });
-
-  // SETUP REMOTE FEED DISPLAY - CURRENTLY ONLY WORKS WITH ONE REMOTE PERSON IN CALL
-  const remoteFeedDiv = document.getElementById('remoteVideo');
-  let remoteFeedView: VideoStreamRendererView;
-  call.remoteParticipants.forEach(async (participant) => {
-    console.log('Subscribing to remote participant video streams', participant);
-    participant.on('videoStreamsUpdated', async (e) => {
-      console.log('Remote participant video streams updated', e);
-      e.added.forEach(async (stream) => {
-        console.log('Adding remote video stream');
-        const renderer = new VideoStreamRenderer(stream);
-        remoteFeedView = await renderer.createView({ scalingMode: 'Fit' });
-        remoteFeedDiv.appendChild(remoteFeedView.target);
-      });
-      e.removed.forEach(() => {
-        console.log('Removing remote video stream');
-        remoteFeedView?.dispose();
-        remoteFeedDiv.removeChild(remoteFeedView.target);
-      });
-    });
-    // process existing video streams
-    console.log('Processing existing video stream for remote participant', participant.displayName);
-    participant.videoStreams.forEach(async (stream) => {
-      console.log('Adding remote video stream');
-      const renderer = new VideoStreamRenderer(stream);
-      remoteFeedView = await renderer.createView({ scalingMode: 'Fit' });
-      remoteFeedDiv.appendChild(remoteFeedView.target);
-    });
-
-  });
-  call.on('remoteParticipantsUpdated', async (e) => {
-    e.added.forEach(async (participant) => {
-      console.log('Subscribing to remote participant video streams', participant);
-      participant.on('videoStreamsUpdated', async (e) => {
-        console.log('Remote participant video streams updated', e);
-        e.added.forEach(async (stream) => {
-          console.log('Adding remote video stream');
-          const renderer = new VideoStreamRenderer(stream);
-          remoteFeedView = await renderer.createView({ scalingMode: 'Fit' });
-          remoteFeedDiv.appendChild(remoteFeedView.target);
-        });
-        e.removed.forEach(() => {
-          console.log('Removing remote video stream');
-          remoteFeedView?.dispose();
-          remoteFeedDiv.removeChild(remoteFeedView.target);
-        });
-      });
-      // process existing video streams
-      console.log('Processing existing video stream for remote participant', participant.displayName);
-      participant.videoStreams.forEach(async (stream) => {
-        console.log('Adding remote video stream');
-        const renderer = new VideoStreamRenderer(stream);
-        remoteFeedView = await renderer.createView({ scalingMode: 'Fit' });
-        remoteFeedDiv.appendChild(remoteFeedView.target);
-      });
-    });
-    e.removed.forEach((participant) => {
-      console.log('Remote participant removed', participant);
-    });
-  });
-
-  // SETUP SWITCH CAMERA BUTTON
-  const switchCameraButton = document.getElementById('switchCameraButton') as HTMLButtonElement;
-  switchCameraButton.addEventListener('click', async () => {
-    switchCameraButton.disabled = true;
-    try {
-      await switchCameraSource(call, localVideoStream, deviceManager, chosenCameraLabel);
-      let intervalCounter = 0;
-      setInterval(async () => {
-        if (intervalCounter > 50) {
-          return;
-        }
-
-        await switchCameraSource(call, localVideoStream, deviceManager, chosenCameraLabel);
-        intervalCounter++;
-      }, 1000);
-    } finally {
-      switchCameraButton.disabled = false;
+      deepNoiseSupressionButton.disabled = false;
     }
   });
 
@@ -224,17 +93,33 @@ async function main() {
   });
 }
 
-const switchCameraSource = async (call: Call, localVideoStream: LocalVideoStream, deviceManager: any, chosenCameraLabel: HTMLElement) => {
-  if (!localVideoStream) {
-    console.error('Local video stream not started, cannot switch camera source');
-    return;
+const startNoiseSuppressionEffect = async (call: Call): Promise<void> => {
+  console.log('Starting noise suppression effect');
+  const audioEffects: AudioEffectsStartConfig = {
+    noiseSuppression: new DeepNoiseSuppressionEffect()
   }
-  const cameras = await deviceManager.getCameras();
-  const currentCamera = call.localVideoStreams[0].source;
-  const newCamera = cameras[(++chosenCameraCounter) % cameras.length]; // Cycle through cameras
-  chosenCameraLabel.innerText = `${newCamera.name}`;
-  console.log('Switching camera source', currentCamera, newCamera);
-  await localVideoStream.switchSource(newCamera);
+  const stream = call?.localAudioStreams.find((stream) => stream.mediaStreamType === 'Audio');
+  if (stream && audioEffects && audioEffects.noiseSuppression) {
+    const audioEffectsFeature = stream.feature(Features.AudioEffects);
+    const isNoiseSuppressionSupported = await audioEffectsFeature.isSupported(audioEffects.noiseSuppression);
+    if (isNoiseSuppressionSupported) {
+      await audioEffectsFeature.startEffects(audioEffects);
+    } else {
+      console.warn('Deep Noise Suppression is not supported on this platform.');
+    }
+  }
+};
+
+const stopNoiseSuppressionEffect = async (call: Call): Promise<void> => {
+  console.log('Stopping noise suppression effect');
+  const stream = call?.localAudioStreams.find((stream) => stream.mediaStreamType === 'Audio');
+  if (stream) {
+    const audioEffects: AudioEffectsStopConfig = {
+      noiseSuppression: true
+    };
+    const audioEffectsFeature = stream.feature(Features.AudioEffects);
+    await audioEffectsFeature.stopEffects(audioEffects);
+  }
 };
 
 main();
