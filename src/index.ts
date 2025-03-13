@@ -40,6 +40,10 @@ async function main() {
 
   // JOIN CALL
   const call = callAgent.join({ groupId }, { audioOptions: { muted: true } });
+
+  // Start effects while call is in connecting state
+  startNoiseSuppressionEffect(call);
+
   const callStatusSpan = document.getElementById('callStatus');
   call.on('stateChanged', () => {
     callStatusSpan.innerText = call.state;
