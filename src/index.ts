@@ -1,7 +1,5 @@
-import { AudioEffectsStartConfig, AudioEffectsStopConfig, Call, CallClient, Features } from "@azure/communication-calling";
-import { DeepNoiseSuppressionEffect } from "@azure/communication-calling-effects";
 import { AzureCommunicationTokenCredential } from "@azure/communication-common";
-import { createStatefulCallClient } from "@azure/communication-react";
+import { createAzureCommunicationCallAdapter, createStatefulCallClient, onResolveDeepNoiseSuppressionDependency } from "@azure/communication-react";
 
 const groupId = '9d5ec556-3677-4c5b-a648-cfeb05f90659';
 
@@ -41,20 +39,15 @@ async function main() {
   // LOAD SDK
   const sdkStatusSpan = document.getElementById('sdkStatus');
   sdkStatusSpan.innerText = 'SDK Loading';
-  const callClient = createStatefulCallClient({
-    userId: { communicationUserId: userId },
-  });
-  callClient.onStateChange((state) => {
-    console.log('CallClient state changed', state);
-  });
-  const tokenCredential = new AzureCommunicationTokenCredential(token);
-  const callAgent = await callClient.createCallAgent(tokenCredential, { displayName: `ACS User ${Math.floor(Math.random() * 100)}` });
-  sdkStatusSpan.innerText = 'SDK Loaded';
+  const displayName = `ACS User ${Math.floor(Math.random() * 100)}`
   const displayNameSpan = document.getElementById('displayName');
-  displayNameSpan.innerText = callAgent.displayName;
+  displayNameSpan.innerText = displayName;
+
+  const adapter = await createAdapter(userId, token, displayName);
+  sdkStatusSpan.innerText = 'SDK Loaded';
 
   // JOIN CALL
-  const call = callAgent.join({ groupId }, { audioOptions: { muted: true } });
+  const call = adapter.joinCall();
   const callStatusSpan = document.getElementById('callStatus');
   call.on('stateChanged', () => {
     callStatusSpan.innerText = call.state;
@@ -73,7 +66,7 @@ async function main() {
   muteButton.addEventListener('click', async () => {
     muteButton.disabled = true;
     try {
-      call.isMuted ? await call.unmute() : await call.mute();
+      call.isMuted ? await adapter.unmute() : await adapter.mute();
     } finally {
       muteButton.disabled = false;
     }
@@ -84,10 +77,10 @@ async function main() {
   deepNoiseSupressionButton.addEventListener('click', async () => {
     deepNoiseSupressionButton.disabled = true;
     try {
-      if (noiseSuppressionEnabled) {
-        await stopNoiseSuppressionEffect(call);
+      if (!noiseSuppressionEnabled) {
+        await adapter.startNoiseSuppressionEffect();
       } else {
-        await startNoiseSuppressionEffect(call);
+        await adapter.stopNoiseSuppressionEffect();
       }
       noiseSuppressionEnabled = !noiseSuppressionEnabled;
       deepNoiseSupressionButton.innerText = noiseSuppressionEnabled ? 'Stop Deep Noise Suppression' : 'Start Deep Noise Suppression';
@@ -101,40 +94,30 @@ async function main() {
   endCallButton.addEventListener('click', async () => {
     endCallButton.disabled = true;
     try {
-      await call.hangUp();
+      await adapter.leaveCall();
     } finally {
       endCallButton.disabled = false;
     }
   });
 }
 
-const startNoiseSuppressionEffect = async (call: Call): Promise<void> => {
-  console.log('Starting noise suppression effect');
-  const audioEffects: AudioEffectsStartConfig = {
-    noiseSuppression: new DeepNoiseSuppressionEffect()
-  }
-  const stream = call?.localAudioStreams.find((stream) => stream.mediaStreamType === 'Audio');
-  if (stream && audioEffects && audioEffects.noiseSuppression) {
-    const audioEffectsFeature = stream.feature(Features.AudioEffects);
-    const isNoiseSuppressionSupported = await audioEffectsFeature.isSupported(audioEffects.noiseSuppression);
-    if (isNoiseSuppressionSupported) {
-      await audioEffectsFeature.startEffects(audioEffects);
-    } else {
-      console.warn('Deep Noise Suppression is not supported on this platform.');
+const createAdapter = (
+  userId: string,
+  token: string,
+  displayName: string
+) => {
+  return createAzureCommunicationCallAdapter({
+    userId: { communicationUserId: userId },
+    credential: new AzureCommunicationTokenCredential(token),
+    displayName,
+    locator: { groupId },
+    options: {
+      deepNoiseSuppressionOptions: {
+        deepNoiseSuppressionOnByDefault: false,
+        onResolveDependency: onResolveDeepNoiseSuppressionDependency
+      }
     }
-  }
-};
-
-const stopNoiseSuppressionEffect = async (call: Call): Promise<void> => {
-  console.log('Stopping noise suppression effect');
-  const stream = call?.localAudioStreams.find((stream) => stream.mediaStreamType === 'Audio');
-  if (stream) {
-    const audioEffects: AudioEffectsStopConfig = {
-      noiseSuppression: true
-    };
-    const audioEffectsFeature = stream.feature(Features.AudioEffects);
-    await audioEffectsFeature.stopEffects(audioEffects);
-  }
-};
+  });
+}
 
 main();
