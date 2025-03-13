@@ -1,5 +1,7 @@
+import React, { useEffect } from 'react';
+import ReactDOM from 'react-dom/client';
 import { AzureCommunicationTokenCredential } from "@azure/communication-common";
-import { createAzureCommunicationCallAdapter, createStatefulCallClient, onResolveDeepNoiseSuppressionDependency } from "@azure/communication-react";
+import { CallComposite, createAzureCommunicationCallAdapter, createStatefulCallClient, onResolveDeepNoiseSuppressionDependency } from "@azure/communication-react";
 
 const groupId = '9d5ec556-3677-4c5b-a648-cfeb05f90659';
 
@@ -99,6 +101,8 @@ async function main() {
       endCallButton.disabled = false;
     }
   });
+
+  return adapter;
 }
 
 const createAdapter = (
@@ -120,4 +124,23 @@ const createAdapter = (
   });
 }
 
-main();
+const App = () => {
+  const [adapter, setAdapter] = React.useState<any>(null);
+
+  useEffect(() => {
+    main().then((adapter) => {
+      setAdapter(adapter);
+    });
+  }, []);
+
+  if (!adapter) {
+    return <div>Loading...</div>;
+  }
+
+  return (
+    <CallComposite adapter={adapter} />
+  )
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
+root.render(<App />);
